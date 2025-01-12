@@ -1,0 +1,485 @@
+---
+title: "WOF Analysis"
+output: html_notebook
+---
+
+making list of all clues - do once & save as csv
+```{r}
+library(rvest)
+library(dplyr)
+
+url <- "https://buyavowel.boards.net/page/compendium30"
+webpage <- read_html(url)
+
+table <- webpage %>%
+  html_node("table") %>%
+  html_table(fill = TRUE)
+
+# Convert to a data frame
+prize_data <- as.data.frame(table)
+prize_data <- prize_data[7:nrow(prize_data),1:5]
+
+# Rename columns for clarity (adjust based on actual table headers)
+colnames(prize_data) <- c("Puzzle", "Category", "Date", "Episode_Number", "Round")
+
+
+scrape_pages <- function(num, full_set){
+  url <- paste("https://buyavowel.boards.net/page/compendium", num, sep = "")
+  webpage <- read_html(url)
+
+  # Find the table on the page
+  table <- webpage %>%
+    html_node("table") %>%
+    html_table(fill = TRUE)
+  
+  # Convert to a data frame
+  ddd <- as.data.frame(table)
+  ddd <- ddd[7:nrow(ddd),1:5]
+  
+  # Rename columns for clarity (adjust based on actual table headers)
+  colnames(ddd) <- c("Puzzle", "Category", "Date", "Episode_Number", "Round")
+  
+  full_set <- rbind(full_set, ddd)
+  return(full_set)
+  paste("did season ", num)
+}
+
+for(i in 32:42){
+  prize_data <- scrape_pages(i, prize_data)
+}
+
+```
+
+start here
+```{r}
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(stopwords)
+data <- read.csv("all_recent_puzzles.csv", as.is=T)
+data <- data %>%
+  filter(Puzzle != "")
+
+words <- data %>%
+  separate_rows(Puzzle, sep = " ") %>%
+  mutate(Puzzle = trimws(Puzzle)) %>%
+  filter(Puzzle != "") %>%
+  mutate(Puzzle = tolower(Puzzle))
+```
+
+word and category frequency
+```{r}
+# Count the frequency of each word
+full_counts <- words %>%
+  count(Puzzle, sort = TRUE)
+
+category_counts <- data %>%
+  mutate(Category = if_else(str_detect(Round, "\\^"), "Crossword", Category)) %>%
+  count(Category, sort = TRUE)
+
+```
+
+get common words in each category
+```{r}
+get_most_common_words <- function(dat, cat) {
+  # Count the frequency of each word
+  word_counts <- dat %>%
+    filter(Category == cat) %>%
+    count(Puzzle, sort = TRUE)
+
+  return(word_counts)
+}
+
+head(get_most_common_words(words, "Phrase"), 20)
+head(get_most_common_words(words, "What Are You Doing?"), 30)
+head(get_most_common_words(words, "Food & Drink"), 20)
+head(get_most_common_words(words, "Place"), 30)
+head(get_most_common_words(words, "Fun & Games"), 20)
+head(get_most_common_words(words, "Event"), 20)
+head(get_most_common_words(words, "Living Thing"), 20)
+head(get_most_common_words(words, "Living Things"), 20)
+head(get_most_common_words(words, "Event"), 20)
+head(get_most_common_words(words, "Person"), 20)
+
+```
+
+letter frequency, both overall and in bonus round
+```{r}
+all_letters <- words %>%
+  separate_rows(Puzzle, sep = "") %>%
+  filter(Puzzle != "")
+
+# overall
+letter_counts <- all_letters %>%
+  count(Puzzle, sort = TRUE)
+
+# in bonus round, removing the ones they give you
+bonus_letter_counts <- all_letters %>%
+  filter(grepl("BR", Round)) %>%
+  filter(Puzzle != "r" ) %>%
+  filter(Puzzle != "s" ) %>%
+  filter(Puzzle != "t" ) %>%
+  filter(Puzzle != "l" ) %>%
+  filter(Puzzle != "n" ) %>%
+  filter(Puzzle != "e" ) %>%
+  count(Puzzle, sort = TRUE)
+  
+  
+  #c("r", "s", "t", "l", "n", "e")
+
+
+```
+
+little words and apostrophes
+```{r}
+two_letter <- full_counts %>%
+  filter(str_length(Puzzle) == 2)
+
+three_letter <- full_counts %>%
+  filter(str_length(Puzzle) == 3)
+
+apos <- full_counts %>% 
+  filter(grepl("'", Puzzle))
+  
+
+```
+
+_R
+```{r}
+words_with_r <- words %>%
+  filter(substr(Puzzle, 2, 2) == "r")  # Check if the 2nd letter is "R"
+
+common_r <- words_with_r %>%
+  count(Puzzle, sort = TRUE)
+
+before_r <- words_with_r %>%
+  mutate(first_letter = substr(Puzzle, 1, 1)) %>%  
+  count(first_letter, sort = TRUE)
+
+```
+
+_L
+```{r}
+words_with_l <- words %>%
+  filter(substr(Puzzle, 2, 2) == "l")  
+
+before_l <- words_with_l %>%
+  mutate(first_letter = substr(Puzzle, 1, 1)) %>%  
+  count(first_letter, sort = TRUE)
+
+```
+
+_H
+```{r}
+words_with_h <- words %>%
+  filter(substr(Puzzle, 2, 2) == "h")  %>%
+  filter(Puzzle != "the")
+
+before_h <- words_with_h %>%
+  mutate(first_letter = substr(Puzzle, 1, 1)) %>%  
+  count(first_letter, sort = TRUE)
+
+```
+
+_P
+```{r}
+words_with_p <- words %>%
+  filter(substr(Puzzle, 2, 2) == "p")  
+
+before_p <- words_with_p %>%
+  mutate(first_letter = substr(Puzzle, 1, 1)) %>%  
+  count(first_letter, sort = TRUE)
+
+```
+
+_S (all vowels)
+```{r}
+words_with_s <- words %>%
+  filter(substr(Puzzle, 2, 2) == "s")  
+
+before_s <- words_with_s %>%
+  mutate(first_letter = substr(Puzzle, 1, 1)) %>%  
+  count(first_letter, sort = TRUE)
+
+```
+
+_T
+```{r}
+words_with_t <- words %>%
+  filter(substr(Puzzle, 2, 2) == "t")  
+
+before_t <- words_with_t %>%
+  mutate(first_letter = substr(Puzzle, 1, 1)) %>%  
+  count(first_letter, sort = TRUE)
+
+```
+
+_N (all vowels)
+```{r}
+words_with_n <- words %>%
+  filter(substr(Puzzle, 2, 2) == "n")  
+
+before_n <- words_with_n %>%
+  mutate(first_letter = substr(Puzzle, 1, 1)) %>%  
+  count(first_letter, sort = TRUE)
+
+```
+
+end of word patterns
+```{r}
+end_ne <- words %>%
+  mutate(Puzzle = str_trim(Puzzle)) %>%
+  filter(str_detect(Puzzle, "ne$")) %>%
+  count(Puzzle, sort = TRUE)
+
+end_le <- words %>%
+  mutate(Puzzle = str_trim(Puzzle)) %>%
+  filter(str_detect(Puzzle, "le$")) %>%
+  count(Puzzle, sort = TRUE)
+
+end_l <- words %>%
+  mutate(Puzzle = str_trim(Puzzle)) %>%
+  filter(str_detect(Puzzle, "l$")) %>%
+  count(Puzzle, sort = TRUE)
+
+end_t <- words %>%
+  mutate(Puzzle = str_trim(Puzzle)) %>%
+  filter(str_detect(Puzzle, "t$")) %>%
+  count(Puzzle, sort = TRUE)
+
+end_te <- words %>%
+  mutate(Puzzle = str_trim(Puzzle)) %>%
+  filter(str_detect(Puzzle, "te$")) %>%
+  count(Puzzle, sort = TRUE)
+
+end_n <- words %>%
+  mutate(Puzzle = str_trim(Puzzle)) %>%
+  filter(str_detect(Puzzle, "n$")) %>%
+  count(Puzzle, sort = TRUE)
+
+```
+
+analyzing frequency prize puzzle categories and clues
+```{r}
+all_prize_puzzles <- data %>%
+  filter(grepl("\\*", Round)) %>%
+  select(Puzzle, Category)
+  
+prize_category_frequency <- all_prize_puzzles %>%
+  count(Category, sort = TRUE) %>%
+  rename(Frequency = n)
+
+prize_word_frequency <- all_prize_puzzles %>%
+  mutate(Puzzle = tolower(Puzzle)) %>%   
+  unnest_tokens(word, Puzzle) %>%       
+  count(word, sort = TRUE) %>%          
+  rename(Frequency = n)
+
+```
+
+analyzing bonus round clues
+```{r}
+all_bonus_puzzles <- data %>%
+  filter(grepl("BR", Round)) 
+
+# word frequency
+bonus_word_frequency <- all_bonus_puzzles %>%
+  mutate(Puzzle = tolower(Puzzle)) %>%   
+  unnest_tokens(word, Puzzle) %>%       
+  count(word, sort = TRUE) %>%          
+  rename(Frequency = n)
+
+# character frequency
+bonus_letter_frequency <- all_bonus_puzzles %>%
+  mutate(Puzzle = tolower(Puzzle)) %>%   
+  unnest_tokens(letter, Puzzle, token = "characters") %>%
+  count(letter, sort = TRUE) %>%          
+  rename(Frequency = n) %>%
+  mutate(Given = ifelse(letter %in% c("r", "s", "t", "l", "n", "e"), 1, 0))
+
+```
+
+most common words starting with each letter
+```{r}
+get_words_by_letter <- function(let) {
+  these_words <- words %>%
+    filter(substr(Puzzle, 1, 1) == let)  %>%
+    count(Puzzle, sort = TRUE) %>%
+    rename(Frequency = n) %>%
+    head(15)
+  
+  return(these_words)
+}
+
+popular_by_letter <- get_words_by_letter("a")
+for(i in 2:26){
+  popular_by_letter <- rbind(popular_by_letter, get_words_by_letter(letters[i]))
+}
+
+popular_words <- popular_by_letter %>%
+  filter(Frequency >= 30)
+
+popular_words_full <- words %>%
+  filter(Puzzle %in% popular_words$Puzzle) %>%
+  filter(str_length(Puzzle) >= 4) %>%
+    mutate(Puzzle = toupper(Puzzle))
+  
+```
+
+words with certain letter in certain spot
+```{r}
+popular_by_letter %>%
+  filter(substr(Puzzle, 3, 3) == "t")
+
+```
+
+looking through triple toss-ups
+```{r}
+triples <- data %>%
+  filter(as.Date(Date, format="%m/%d/%y") >= as.Date("9/9/19", format="%m/%d/%y")) %>%
+  filter(grepl("\\T[3,4,5]", Round)) 
+
+
+```
+
+save top 15 words as as phone wallpapers
+```{r}
+library(magick)
+library(RColorBrewer)
+## use popular_by_letter
+
+# Set parameters for the image
+width <- 1080          # Width of the image (in pixels)
+height <- 1920         # Height of the image (in pixels)
+text_color <- "black"       # Text color
+font_size <- 75             
+
+write_wallpapers <- function(i, my_data){
+ if(i==24) return("no")
+  let <- letters[i]
+  background_color <- brewer.pal(12, "Set3")[i %% 12 + 1]
+  
+  output_path <- paste("wallpaper_", let, ".png", sep="")
+  chosen_words <- my_data %>% 
+    filter(substr(Puzzle, 1, 1) == let) 
+  text <- paste(chosen_words$Puzzle, collapse = "\n")
+  
+  # Create a blank image with the specified background color
+  image <- image_blank(width = width, height = height, color = background_color)
+  
+  # Annotate the image with the text
+  image <- image_annotate(
+    image,
+    text = text,
+    color = text_color,
+    size = font_size,
+    gravity = "center",
+    location = "+0+120"
+  )
+
+  image_write(image, output_path)
+  
+}
+
+for(i in 1:26){
+  write_wallpapers(i, popular_by_letter)
+}
+
+write_wallpapers(1, popular_by_letter)
+
+```
+
+estimating the bonus round wedge distribution
+```{r}
+library(rvest)
+library(stringr)
+library(dplyr)
+
+# gathering links of game write-ups
+url <- "https://buyavowel.boards.net/thread/19071/season-40-recap-directory"
+page <- read_html(url)
+
+links <- as.data.frame(page %>%
+  html_nodes("a") %>%          
+  html_attr("href"))
+
+names(links)[1] <- "URLs" 
+
+filtered_links <- links %>%
+  filter(grepl("^https://buyavowel.boards.net/thread", URLs)) %>%
+  filter(!grepl("cwof", URLs)) # celeb WOF has diff wedges
+
+##############################################################
+# Function to extract the bonus round prize from a single page
+extract_prize <- function(i) {
+  my_url <- filtered_links$URLs[i]
+  page <- tryCatch(read_html(my_url), error = function(e) NULL)
+  if (is.null(page)) {
+    return(NA)
+  }
+
+  bonus_round_section <- page %>%
+      html_nodes("body") %>%      
+      html_text(trim = TRUE) %>%  
+      str_split("BONUS ROUND") %>%  # Split at the "BONUS ROUND" section
+      .[[1]]
+  
+  #take last entry
+  bonus_round_section <- bonus_round_section[length(bonus_round_section)]
+  
+ prize_text <- bonus_round_section %>%
+    str_extract(".+?(?=\n\t\t\t\t\t\t\n)") %>% # stop before comment section
+    tolower()
+  
+  ## looking for cash or car options
+  cash_options <- c("40,000|45,000|50,000|75,000|100,000|1,000,000")
+  car_options <- c("car|ford|bmw|mini cooper|toyota|mazda|honda|mercedes|infiniti|chevy|lincoln|nissan")
+
+  cash_match <- str_extract_all(prize_text, cash_options)[[1]]
+  car_match <- car_options[str_detect(prize_text, car_options)]
+  
+  if(length(cash_match) == 1) return(cash_match)
+  if(length(car_match) > 0) return("car")
+  if(length(cash_match) >= 2) return ("too much cash")
+  if(length(car_match) == 0 & length(cash_match) == 0) return("both missing")
+}
+
+# making list of prizes
+bonus_prizes <- as.data.frame(filtered_links)
+bonus_prizes$Prize <- "NA"
+for(i in 1:nrow(bonus_prizes)){
+  bonus_prizes$Prize[i] <- extract_prize(i)
+}
+#manual fixes
+bonus_prizes$Prize[55] <- "40,000"
+bonus_prizes$Prize[70] <- "50,000"
+bonus_prizes$Prize[172] <- "40,000"
+bonus_prizes$Prize[187] <- "40,000"
+bonus_prizes$Prize[191] <- "40,000"
+
+# analyzing the results
+bonus_results <- bonus_prizes %>%
+  group_by(Prize) %>%                 
+  summarise(count = n()) %>%          
+  mutate(Percentage = round(count / sum(count) * 100, 1))
+
+```
+
+retrospective of my game
+```{r}
+# H = bad guess
+words %>%
+  filter(substr(Puzzle, 1, 1) == "t") %>%
+  filter(substr(Puzzle, 2, 2) == "h") %>%
+  filter(substr(Puzzle, 4, 4) == "e") %>%
+  filter(nchar(Puzzle) == 4)
+
+# C = another bad guess. it didn't matter! 
+words %>%
+  filter(substr(Puzzle, 1, 1) == "t") %>%
+  filter(substr(Puzzle, 3, 3) == "c") %>%
+  filter(substr(Puzzle, 4, 4) == "e") %>%
+  filter(nchar(Puzzle) == 4)
+
+```
+
